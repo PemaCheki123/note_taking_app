@@ -38,14 +38,14 @@ const login = async (req, res) => {
     const accessToken = jwt.sign(
       { id: user.id, email: user.email },
       process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: process.env.ACCESS_TOKEN_EXPIRY } // "15m"
+      { expiresIn: process.env.ACCESS_TOKEN_EXPIRY } 
     );
 
     // Generate Refresh Token
     const refreshToken = jwt.sign(
       { id: user.id, email: user.email },
       process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: process.env.REFRESH_TOKEN_EXPIRY } // "7d"
+      { expiresIn: process.env.REFRESH_TOKEN_EXPIRY } 
     );
 
     // Log tokens for debugging

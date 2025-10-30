@@ -6,8 +6,11 @@ function Notes() {
   const [notes, setNotes] = useState([]);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const navigate = useNavigate();
+  const [editingNote, setEditingNote] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
+  const navigate = useNavigate();
   const accessToken = localStorage.getItem("accessToken");
   const refreshToken = localStorage.getItem("refreshToken");
 
@@ -29,18 +32,24 @@ function Notes() {
     }
   );
 
-  useEffect(() => { fetchNotes(); }, []);
-
   const fetchNotes = async () => {
     try {
       const res = await axiosAuth.get("http://localhost:5000/api/notes", {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       setNotes(res.data);
-    } catch {}
+    } catch (err) {
+      console.error(err);
+    }
   };
 
+  useEffect(() => {
+    fetchNotes();
+  }, []);
+
   const addNote = async () => {
+    if (!title.trim()) return alert("Title cannot be empty.");
+    setLoading(true);
     try {
       await axiosAuth.post(
         "http://localhost:5000/api/notes",
@@ -50,16 +59,58 @@ function Notes() {
       setTitle("");
       setContent("");
       fetchNotes();
-    } catch {}
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const editNote = (note) => {
+    setEditingNote(note);
+    setTitle(note.title);
+    setContent(note.content);
+    setShowModal(true);
+  };
+
+  const handleEditSubmit = async () => {
+    if (!title.trim()) return alert("Title cannot be empty.");
+    setLoading(true);
+    try {
+      await axiosAuth.put(
+        `http://localhost:5000/api/notes/${editingNote.id}`,
+        { title, content },
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      setEditingNote(null);
+      setShowModal(false);
+      setTitle("");
+      setContent("");
+      fetchNotes();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const deleteNote = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this note?")) return;
     try {
       await axiosAuth.delete(`http://localhost:5000/api/notes/${id}`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
-      fetchNotes();
-    } catch {}
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingNote(null);
+    setShowModal(false);
+    setTitle("");
+    setContent("");
   };
 
   const handleLogout = () => {
@@ -73,38 +124,74 @@ function Notes() {
       <div style={styles.card}>
         <button onClick={handleLogout} style={styles.logoutButton}>Logout</button>
 
-        <h2 style={styles.title}>Your Notes ✨</h2>
-
+        {/* ✅ Form with embedded image */}
         <div style={styles.form}>
+          <div style={styles.topImage}>
+      
+          </div>
+          <h2 style={styles.title}>Your Notes ✨</h2>
           <input
-            placeholder="Cute title... ✏️"
+            placeholder="Write your Notes... ✏️"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             style={styles.input}
           />
           <textarea
-            placeholder="Pour your heart here 💖"
+            placeholder="Describe it more"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             style={styles.textarea}
           />
-          <button onClick={addNote} style={styles.button}>Add ✨</button>
+          <button onClick={addNote} style={styles.button} disabled={loading}>
+            {loading ? "Saving..." : "Add"}
+          </button>
         </div>
 
+        {/* Notes Grid */}
         <div style={styles.noteList}>
           {notes.length === 0 ? (
-            <p style={{ color: "#777" }}>No notes yet. Write your first cute thought! 💕</p>
+            <p style={{ color: "#777" }}>No notes yet. Write your first thought! </p>
           ) : (
             notes.map((n) => (
               <div key={n.id} style={styles.noteCard}>
-                <h4 style={styles.noteTitle}>{n.title} ✨</h4>
+                <div style={styles.cardButtonsTop}>
+                  <button onClick={() => editNote(n)} style={styles.editButton}>Edit</button>
+                  <button onClick={() => deleteNote(n.id)} style={styles.deleteButton}>Delete</button>
+                </div>
+                <h4 style={styles.noteTitle}>{n.title}</h4>
                 <p style={styles.noteContent}>{n.content}</p>
-                <button onClick={() => deleteNote(n.id)} style={styles.deleteButton}>❌</button>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {/* Modal for Editing */}
+      {showModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent}>
+            <h2>Edit Note ✏️</h2>
+            <input
+              placeholder="Title..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              style={styles.input}
+            />
+            <textarea
+              placeholder="Write your thoughts..."
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              style={styles.textarea}
+            />
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button onClick={cancelEdit} style={styles.cancelButton}>Cancel</button>
+              <button onClick={handleEditSubmit} style={styles.button}>
+                {loading ? "Saving..." : "Update"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -112,125 +199,171 @@ function Notes() {
 const styles = {
   container: {
     minHeight: "100vh",
-    background: "linear-gradient(135deg, #f8e8f8, #eaf5ff)",
+    background: "linear-gradient(180deg, #f5f5f7 0%, #ffffff 100%)",
     display: "flex",
-    justifyContent: "center",
-    padding: "40px 20px",
-    fontFamily: "'Poppins', sans-serif",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "20px",
+    fontFamily: "'SF Pro Display', 'Inter', sans-serif",
   },
-
   card: {
     width: "100%",
     maxWidth: "850px",
-    background: "rgba(255,255,255,0.45)",
-    backdropFilter: "blur(18px)",
-    borderRadius: "25px",
-    padding: "30px",
-    border: "2px solid rgba(255,255,255,0.4)",
-    boxShadow: "0 8px 25px rgba(0,0,0,0.1)",
+    background: "#ffffff",
+    borderRadius: "16px",
+    padding: "30px 40px",
+    border: "1px solid #e0e0e0",
+    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
     position: "relative",
-    boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
-    transition: "0.3s",
-    animation: "fadeIn 0.9s ease forwards",
   },
-
   logoutButton: {
     position: "absolute",
     top: "20px",
     right: "20px",
-    background: "#FF9AA2",
-    color: "white",
-    border: "none",
+    background: "#efefef",
+    color: "#333",
+    border: "1px solid #ccc",
     padding: "8px 14px",
-    borderRadius: "14px",
+    borderRadius: "8px",
     cursor: "pointer",
-    fontWeight: 600,
-    transition: "0.3s",
+    fontWeight: 500,
   },
-
   title: {
     textAlign: "center",
-    color: "#444",
-    marginBottom: "25px",
-    fontSize: "30px",
+    color: "#111",
+    marginBottom: "5px",
+    fontSize: "28px",
     fontWeight: 700,
   },
-
   form: {
     display: "flex",
     flexDirection: "column",
-    gap: "15px",
+    gap: "12px",
     marginBottom: "40px",
   },
-
+  topImage: {
+    width: "100%",
+    height: "200px",
+    backgroundImage: "url('https://i.pinimg.com/1200x/9d/35/e1/9d35e119bbeb1539749902da35193f4d.jpg')",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    borderRadius: "12px",
+    marginBottom: "15px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+  },
+  topImageText: {
+    color: "white",
+    fontSize: "24px",
+    fontWeight: "700",
+    textShadow: "0 2px 6px rgba(0,0,0,0.4)",
+  },
   input: {
-    padding: "14px",
-    borderRadius: "14px",
-    border: "2px solid #ffdce5",
+    padding: "12px 14px",
+    borderRadius: "10px",
+    border: "1px solid #dcdcdc",
     outline: "none",
-    background: "#fff0f6",
+    background: "#fafafa",
+    fontSize: "15px",
   },
-
   textarea: {
-    padding: "14px",
-    borderRadius: "14px",
-    border: "2px solid #ffdce5",
-    background: "#fff0f6",
+    padding: "12px 14px",
+    borderRadius: "10px",
+    border: "1px solid #dcdcdc",
+    background: "#fafafa",
     resize: "vertical",
-    minHeight: "90px",
+    minHeight: "100px",
+    fontSize: "15px",
   },
-
   button: {
-    padding: "14px",
-    background: "#B5EAD7",
-    color: "#555",
-    fontWeight: 700,
-    borderRadius: "14px",
+    padding: "12px 20px",
+    background: "#007AFF",
+    color: "white",
+    fontWeight: 600,
+    borderRadius: "10px",
     border: "none",
     cursor: "pointer",
-    fontSize: "16px",
-    width: "160px",
+    fontSize: "15px",
+    width: "120px",
     alignSelf: "flex-end",
-    transition: "0.3s",
   },
-
   noteList: {
     display: "grid",
     gap: "18px",
-    gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
   },
-
   noteCard: {
-    background: "rgba(255,255,255,0.7)",
-    backdropFilter: "blur(10px)",
-    padding: "20px",
-    borderRadius: "20px",
+    background: "#fdfdfd",
+    border: "1px solid #eaeaea",
+    borderRadius: "12px",
+    padding: "16px",
     position: "relative",
-    transition: "0.3s",
-    border: "1px solid rgba(255,255,255,0.5)",
-    animation: "fadeUp 0.6s ease",
+    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.05)",
   },
-
   noteTitle: {
-    fontSize: "18px",
-    fontWeight: 700,
-    color: "#555",
+    fontSize: "17px",
+    fontWeight: 600,
+    color: "#111",
+    marginTop: "30px", // so title sits below top-right buttons
   },
-
   noteContent: {
     marginTop: "8px",
     fontSize: "14px",
-    color: "#777",
+    color: "#555",
+    lineHeight: 1.5,
   },
-
-  deleteButton: {
+  cardButtonsTop: {
     position: "absolute",
-    top: "12px",
-    right: "12px",
-    background: "#FFB3BA",
-    border: "none",
-    borderRadius: "10px",
+    top: "10px",
+    right: "10px",
+    display: "flex",
+    gap: "8px",
+  },
+  editButton: {
+    background: "#e8f0fe",
+    border: "1px solid #bcd0ff",
+    borderRadius: "8px",
     padding: "6px 10px",
+    cursor: "pointer",
+  },
+  deleteButton: {
+    background: "#fdecea",
+    border: "1px solid #f5b3ae",
+    borderRadius: "8px",
+    padding: "6px 10px",
+    cursor: "pointer",
+  },
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  modalContent: {
+    width: "90%",
+    maxWidth: "500px",
+    background: "#fff",
+    borderRadius: "16px",
+    padding: "30px",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  cancelButton: {
+    padding: "12px 20px",
+    background: "#ddd",
+    color: "#333",
+    borderRadius: "10px",
+    border: "none",
     cursor: "pointer",
   },
 };
