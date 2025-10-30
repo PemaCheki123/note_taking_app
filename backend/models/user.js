@@ -2,11 +2,10 @@ const db = require("./db");
 const bcrypt = require("bcrypt");
 
 const createUser = async (name, email, password) => {
-  const hashedPassword = await bcrypt.hash(password, 10);
   return new Promise((resolve, reject) => {
     db.query(
       "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-      [name, email, hashedPassword],
+      [name, email, password],
       (err, result) => {
         if (err) reject(err);
         else resolve(result);
